@@ -1,0 +1,112 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-ios:
+    name: Build IPA
+    runs-on: macos-13
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Reassemble Large Static Libraries
+        shell: bash
+        run: |
+          echo "Reassembling libiPhone-lib.a..."
+          cat Libraries/libiPhone-lib.a.part01 Libraries/libiPhone-lib.a.part02 Libraries/libiPhone-lib.a.part03 Libraries/libiPhone-lib.a.part04 Libraries/libiPhone-lib.a.part05 > Libraries/libiPhone-lib.a
+          echo "Reassembling libil2cpp.a..."
+          cat Libraries/libil2cpp.a.part01 Libraries/libil2cpp.a.part02 > Libraries/libil2cpp.a
+          rm -f Libraries/*.part*
+          ls -lh Libraries/*.a
+
+      - name: Setup Execution Permissions
+        shell: bash
+        run: |
+          chmod +x process_symbols.sh || true
+          chmod -R +x Il2CppOutputProject/IL2CPP/build/ || true
+          find Il2CppOutputProject/IL2CPP -type f -name "il2cpp" -exec chmod +x {} + || true
+          find Il2CppOutputProject/IL2CPP -type f -name "bee_backend" -exec chmod +x {} + || true
+          find Il2CppOutputProject/IL2CPP -type f -name "UnityLinker" -exec chmod +x {} + || true
+
+      - name: Fix IL2CPP architecture paths if needed
+        shell: bash
+        run: |
+          cd Il2CppOutputProject/IL2CPP/build
+          if [ -d "deploy_x86_64" ] && [ ! -d "deploy_arm64" ]; then
+            cp -r deploy_x86_64 deploy_arm64
+          fi
+          if [ -d "deploy_arm64" ] && [ ! -d "deploy_x86_64" ]; then
+            cp -r deploy_arm64 deploy_x86_64
+          fi
+          cd ../../..
+
+      - name: Show Xcode & System Info
+        run: |
+          sw_vers
+          xcodebuild -version
+
+      - name: Build Xcode Project (Release Unsigned)
+        shell: bash
+        run: |
+          set -o pipefail
+          rm -rf build Payload
+          mkdir -p build
+          
+          xcodebuild build \
+            -project Unity-iPhone.xcodeproj \
+            -scheme Unity-iPhone \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            COMPILER_INDEX_STORE_ENABLE=NO
+
+      - name: Package .app into .ipa
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p Payload
+          APP_PATH=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -type d -name '*.app' -print -quit)
+
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::No .app bundle found in build output!"
+            exit 1
+          fi
+
+          echo "Found app at: $APP_PATH"
+          cp -R "$APP_PATH" Payload/
+          zip -r -q haitactuoitho.ipa Payload
+          ls -lh haitactuoitho.ipa
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: haitactuoitho-IPA
+          path: haitactuoitho.ipa
+          retention-days: 14
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: iOS IPA Build #${{ github.run_number }}
+          draft: false
+          prerelease: false
+          files: haitactuoitho.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

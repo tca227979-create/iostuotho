@@ -1,0 +1,21 @@
+# Ignore unsplit large static libraries (>50MB)
+Libraries/libil2cpp.a
+Libraries/libiPhone-lib.a
+
+# Xcode build artifacts & user state
+build/
+DerivedData/
+*.mode1v3
+*.mode2v3
+*.nib
+*.orig
+*.pbxuser
+*.perspectivev3
+*.ptar
+*.subversion
+*.xcuserstate
+xcuserdata/
+
+# OS files
+.DS_Store
+Thumbs.db
