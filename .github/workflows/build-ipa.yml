@@ -13,7 +13,7 @@ permissions:
 jobs:
   build-ios:
     name: Build IPA
-    runs-on: macos-13
+    runs-on: macos-14
     timeout-minutes: 90
 
     steps:
@@ -39,15 +39,16 @@ jobs:
           find Il2CppOutputProject/IL2CPP -type f -name "bee_backend" -exec chmod +x {} + || true
           find Il2CppOutputProject/IL2CPP -type f -name "UnityLinker" -exec chmod +x {} + || true
 
-      - name: Fix IL2CPP architecture paths if needed
+      - name: Fix IL2CPP architecture paths for Apple Silicon runner
         shell: bash
         run: |
           cd Il2CppOutputProject/IL2CPP/build
           if [ -d "deploy_x86_64" ] && [ ! -d "deploy_arm64" ]; then
             cp -r deploy_x86_64 deploy_arm64
           fi
-          if [ -d "deploy_arm64" ] && [ ! -d "deploy_x86_64" ]; then
-            cp -r deploy_arm64 deploy_x86_64
+          if [ -d "deploy_arm64/bee_backend/mac-x64" ]; then
+            mkdir -p deploy_arm64/bee_backend/mac-arm64
+            cp -r deploy_arm64/bee_backend/mac-x64/* deploy_arm64/bee_backend/mac-arm64/ 2>/dev/null || true
           fi
           cd ../../..
 
