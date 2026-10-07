@@ -3,7 +3,7 @@ Libraries/libil2cpp.a
 Libraries/libiPhone-lib.a
 
 # Xcode build artifacts & user state
-build/
+/build/
 DerivedData/
 *.mode1v3
 *.mode2v3
